@@ -168,9 +168,9 @@
         setTimeout(() => { subscription.unsubscribe(); resolve(null); }, 5000);
       });
     }
-    if (!user) { window.location.href = '/index.html'; return; }
+    if (!user) { window.location.href = '/stereomap/index.html'; return; }
     const teacher = await isTeacher(user);
-    if (!teacher) { window.location.href = '/student.html'; return; }
+    if (!teacher) { window.location.href = '/stereomap/student.html'; return; }
     renderNav('teacher');
     loadSongs();
     attachListeners();

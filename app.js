@@ -26,11 +26,11 @@ async function signInWithGoogle() {
 
 async function signOut() {
   await db.auth.signOut();
-  window.location.href = '/index.html';
+  window.location.href = '/stereomap/index.html';
 }
 
 // ── ROLE CHECK ──
-const TEACHER_EMAILS = ['james.margraf@camas.wednet.edu'];
+const TEACHER_EMAILS = [];
 
 async function isTeacher(user) {
   if (!user) return false;
@@ -74,11 +74,11 @@ async function renderNav(role) {
   const nav = document.getElementById('nav');
   if (!nav) return;
   nav.innerHTML = `
-    <a class="nav-logo" href="${role === 'teacher' ? '/teacher.html' : '/student.html'}">Stereo Map</a>
+    <a class="nav-logo" href="${role === 'teacher' ? '/stereomap/teacher.html' : '/stereomap/student.html'}">Stereo Map</a>
     <div class="nav-right">
       <span class="nav-user">${user.user_metadata?.full_name || user.email}</span>
       <span class="nav-badge ${role}">${role}</span>
-      ${role === 'teacher' ? '<a href="/student.html" class="btn sm">Student view</a>' : ''}
+      ${role === 'teacher' ? '<a href="/stereomap/student.html" class="btn sm">Student view</a>' : ''}
       <button class="btn sm" onclick="signOut()">Sign out</button>
     </div>
   `;
@@ -89,7 +89,7 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── GUARD: redirect if not logged in ──
-async function requireAuth(redirectTo = '/index.html') {
+async function requireAuth(redirectTo = '/stereomap/index.html') {
   const user = await getUser();
   if (!user) { window.location.href = redirectTo; return null; }
   return user;
@@ -100,6 +100,6 @@ async function requireTeacher() {
   const user = await requireAuth('/index.html');
   if (!user) return null;
   const teacher = await isTeacher(user);
-  if (!teacher) { window.location.href = '/student.html'; return null; }
+  if (!teacher) { window.location.href = '/stereomap/student.html'; return null; }
   return user;
 }

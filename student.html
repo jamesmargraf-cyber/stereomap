@@ -131,10 +131,10 @@
         setTimeout(() => { subscription.unsubscribe(); resolve(null); }, 5000);
       });
     }
-    if (!user) { window.location.href = '/index.html'; return; }
+    if (!user) { window.location.href = '/stereomap/index.html'; return; }
     await ensureProfile(user);
     const teacher = await isTeacher(user);
-    if (teacher) { window.location.href = '/teacher.html'; return; }
+    if (teacher) { window.location.href = '/stereomap/teacher.html'; return; }
     renderNav('student');
     loadSongs(user);
     attachListeners();
