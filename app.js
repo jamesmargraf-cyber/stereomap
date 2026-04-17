@@ -30,7 +30,7 @@ async function signOut() {
 }
 
 // ── ROLE CHECK ──
-const TEACHER_EMAILS = [];
+const TEACHER_EMAILS = ['james.margraf@camas.wednet.edu'];
 
 async function isTeacher(user) {
   if (!user) return false;
@@ -97,9 +97,10 @@ async function requireAuth(redirectTo = '/stereomap/index.html') {
 
 // ── GUARD: redirect if not teacher ──
 async function requireTeacher() {
-  const user = await requireAuth('/index.html');
+  const user = await requireAuth('/stereomap/index.html');
   if (!user) return null;
   const teacher = await isTeacher(user);
   if (!teacher) { window.location.href = '/stereomap/student.html'; return null; }
   return user;
+}
 }
