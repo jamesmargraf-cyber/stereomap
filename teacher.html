@@ -463,7 +463,7 @@
 
     const [{ data: songs }, { data: submissions }] = await Promise.all([
       db.from('songs').select('id, title').eq('published', true).order('created_at'),
-      db.from('submissions').select('student_id, song_id, overall_score, attempt_number, profiles(name, email)')
+      db.from('submissions').select('student_id, song_id, overall_score, attempt_number, profiles(name, email)').order('attempt_number', { ascending: true }).limit(1000)
     ]);
 
     if (!songs || songs.length === 0) {
