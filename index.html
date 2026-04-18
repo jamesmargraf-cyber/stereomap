@@ -71,32 +71,27 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/stereomap/app.js"></script>
-  <script>
-    (async () => {
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/stereomap/app.js"></script>
+<script>
   document.getElementById('google-signin-btn').addEventListener('click', signInWithGoogle);
-  
-  // First check for existing session
-  const { data: { session } } = await db.auth.getSession();
-    (async () => {
-      // First check for existing session
-      const { data: { session } } = await db.auth.getSession();
-      if (session?.user) {
+
+  (async () => {
+    const { data: { session } } = await db.auth.getSession();
+    if (session?.user) {
+      await ensureProfile(session.user);
+      const teacher = await isTeacher(session.user);
+      window.location.href = teacher ? '/stereomap/teacher.html' : '/stereomap/student.html';
+      return;
+    }
+    db.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
         await ensureProfile(session.user);
         const teacher = await isTeacher(session.user);
         window.location.href = teacher ? '/stereomap/teacher.html' : '/stereomap/student.html';
-        return;
       }
-      // Listen for OAuth callback completing
-      db.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          await ensureProfile(session.user);
-          const teacher = await isTeacher(session.user);
-          window.location.href = teacher ? '/stereomap/teacher.html' : '/stereomap/student.html';
-        }
-      });
-    })();
-  </script>
+    });
+  })();
+</script>
 </body>
 </html>
