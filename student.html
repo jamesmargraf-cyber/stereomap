@@ -134,8 +134,8 @@
     if (!user) { window.location.href = '/stereomap/index.html'; return; }
     await ensureProfile(user);
     const teacher = await isTeacher(user);
-    if (teacher) { window.location.href = '/stereomap/teacher.html'; return; }
-    renderNav('student');
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+    if (teacher && !isPreview) { window.location.href = '/stereomap/teacher.html'; return; }
     loadSongs(user);
     attachListeners();
   })();
