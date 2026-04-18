@@ -116,7 +116,8 @@
   let answerKey = [];
   let currentAttempt = 1;
   let attemptsUsed = 0;
-  let allAttempts = []; // all past submission rows for this song
+  let allAttempts = [];
+  let lockedInstruments = {};
 
   // ── INIT ──
   (async () => {
@@ -134,8 +135,8 @@
     if (!user) { window.location.href = '/stereomap/index.html'; return; }
     await ensureProfile(user);
     const teacher = await isTeacher(user);
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
-    if (teacher && !isPreview) { window.location.href = '/stereomap/teacher.html'; return; }
+    if (teacher) { window.location.href = '/stereomap/teacher.html'; return; }
+    renderNav('student');
     loadSongs(user);
     attachListeners();
   })();
@@ -241,6 +242,18 @@
     currentAttempt = attemptsUsed + 1;
     const bestScore = allAttempts.length > 0 ? Math.max(...allAttempts.map(a => a.overall_score)) : 0;
     const isMaxed = attemptsUsed >= MAX_ATTEMPTS || bestScore === 100;
+    lockedInstruments = {};
+    if (attemptsUsed > 0 && !isMaxed) {
+      const lastResults = allAttempts[allAttempts.length - 1].results || [];
+      lastResults.forEach((r, idx) => {
+        if (r.type === 'stereo') {
+          if (r.centerGrade === 'close' && r.widthGrade === 'good') lockedInstruments[idx] = 'full';
+          else if (r.centerGrade === 'close') lockedInstruments[idx] = 'center';
+        } else {
+          if (r.grade === 'close') lockedInstruments[idx] = 'full';
+        }
+      });
+    }
 
     // Set up instruments
     if (isMaxed) {
@@ -268,7 +281,7 @@
     // Map
     const svgEl = document.getElementById('map-svg');
     buildMapBase(svgEl);
-    renderDots(svgEl, studentInstruments, null, isMaxed ? answerKey : null);
+    renderDots(svgEl, studentInstruments, null, isMaxed ? answerKey : null, isMaxed ? {} : lockedInstruments);
 
     // Results / buttons
     document.getElementById('results-panel').classList.add('hidden');
@@ -327,7 +340,7 @@
     studentInstruments = scramblePositions(studentInstruments);
     const svgEl = document.getElementById('map-svg');
     buildMapBase(svgEl);
-    renderDots(svgEl, studentInstruments, null, null);
+    renderDots(svgEl, studentInstruments, null, null, lockedInstruments);
     document.getElementById('results-panel').classList.add('hidden');
   }
 
@@ -361,12 +374,23 @@
 
     allAttempts.push({ student_positions: positions, results, overall_score: overall, attempt_number: attemptNum });
 
+    if (!isMaxed) {
+      results.forEach((r, idx) => {
+        if (r.type === 'stereo') {
+          if (r.centerGrade === 'close' && r.widthGrade === 'good') lockedInstruments[idx] = 'full';
+          else if (r.centerGrade === 'close') lockedInstruments[idx] = 'center';
+        } else {
+          if (r.grade === 'close') lockedInstruments[idx] = 'full';
+        }
+      });
+    }
+
     renderAttemptCounter(attemptsUsed, isMaxed);
 
     // Rebuild map — show correct positions only if series is done
     const svgEl = document.getElementById('map-svg');
     buildMapBase(svgEl);
-    renderDots(svgEl, studentInstruments, null, isMaxed ? answerKey : null);
+    renderDots(svgEl, studentInstruments, null, isMaxed ? answerKey : null, isMaxed ? {} : lockedInstruments);
 
     showResults(studentInstruments, isMaxed);
 
@@ -462,14 +486,21 @@
     btn.style.display = 'inline-flex';
     btn.textContent = `Try again →`;
     btn.onclick = () => {
-      // Scramble and reset for next attempt
-      studentInstruments = scramblePositions(studentInstruments);
+      let unlockedIdx = 0;
+      const unlockedCount = studentInstruments.filter((_, i) => !lockedInstruments[i]).length;
+      studentInstruments = studentInstruments.map((inst, idx) => {
+        if (lockedInstruments[idx]) return inst;
+        const pos = 20 + (unlockedIdx++ / Math.max(unlockedCount - 1, 1)) * 140;
+        return { ...inst, angle: pos, radius: MAP_RADII[0] };
+      });
       const svgEl = document.getElementById('map-svg');
       buildMapBase(svgEl);
-      renderDots(svgEl, studentInstruments, null, null);
+      renderDots(svgEl, studentInstruments, null, null, lockedInstruments);
       document.getElementById('results-panel').classList.add('hidden');
+      const lockedCount = Object.keys(lockedInstruments).length;
       document.getElementById('activity-instructions').innerHTML =
-        `<strong>Attempt ${currentAttempt} of ${MAX_ATTEMPTS}.</strong> Listen again and place the instruments where you think they belong.`;
+        '<strong>Attempt ' + currentAttempt + ' of ' + MAX_ATTEMPTS + '.</strong> ' +
+        (lockedCount > 0 ? lockedCount + ' instrument' + (lockedCount > 1 ? 's' : '') + ' locked in. Place the remaining ones.' : 'Listen again and place the instruments.');
     };
     wrap.style.display = 'block';
   }
