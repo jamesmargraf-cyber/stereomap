@@ -103,4 +103,4 @@ async function requireTeacher() {
   if (!teacher) { window.location.href = '/stereomap/student.html'; return null; }
   return user;
 }
-}
+
