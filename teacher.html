@@ -526,29 +526,26 @@
         : null;
 
       html += `<tr><td style="font-weight:500">${esc(student.name)}</td>`;
-
       songs.forEach((song, i) => {
         const attempts = student.songs[song.id];
         if (!attempts || attempts.length === 0) {
           html += `<td><span class="score-pill none">—</span></td>`;
         } else {
-          const best = bestScores[i];
-          const cls = best >= 80 ? 'close' : best >= 50 ? 'near' : 'far';
-          const progression = attempts.map(a => a.overall_score + '%').join(' → ');
-          const attemptCount = attempts.length;
           html += `<td>
-            <span class="score-pill ${cls}" title="${progression}">${best}%</span>
-            <span style="font-size:11px;color:var(--text3);margin-left:4px;">${attemptCount}/3</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;">
+              ${attempts.map(a => {
+                const c = a.overall_score >= 80 ? 'var(--green)' : a.overall_score >= 50 ? 'var(--amber)' : 'var(--red)';
+                return `<span style="color:${c}">${a.overall_score}%</span>`;
+              }).join('<span style="color:var(--text3)"> → </span>')}
+            </span>
           </td>`;
         }
       });
-
       const avgCls = avg !== null ? (avg >= 80 ? 'close' : avg >= 50 ? 'near' : 'far') : 'none';
       html += `<td><span class="score-pill ${avgCls}">${avg !== null ? avg + '%' : '—'}</span></td></tr>`;
     });
-
     html += '</tbody></table></div>';
-    html += '<div style="font-size:12px;color:var(--text3);margin-top:8px;">Hover over a score to see attempt progression. Number shows attempts used out of 3.</div>';
+    html += '<div style="font-size:12px;color:var(--text3);margin-top:8px;">Score progression shown per song. Colors indicate performance level.</div>';
     wrap.innerHTML = html;
   }
 
