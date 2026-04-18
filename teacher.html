@@ -499,10 +499,12 @@
           const cls = best >= 80 ? 'close' : best >= 50 ? 'near' : 'far';
           const progression = attempts.map(a => a.overall_score + '%').join(' → ');
           const attemptCount = attempts.length;
-          html += `<td>
-            <span class="score-pill ${cls}" title="${progression}">${best}%</span>
-            <span style="font-size:11px;color:var(--text3);margin-left:4px;">${attemptCount}/3</span>
-          </td>`;
+         html += `<td>
+  <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);">${attempts.map((a, i) => {
+    const c = a.overall_score >= 80 ? 'var(--green)' : a.overall_score >= 50 ? 'var(--amber)' : 'var(--red)';
+    return `<span style="color:${c}">${a.overall_score}%</span>`;
+  }).join('<span style="color:var(--text3)"> → </span>')}</span>
+</td>`;
         }
       });
 
