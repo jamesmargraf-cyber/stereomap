@@ -78,7 +78,7 @@ async function renderNav(role) {
     <div class="nav-right">
       <span class="nav-user">${user.user_metadata?.full_name || user.email}</span>
       <span class="nav-badge ${role}">${role}</span>
-      ${role === 'teacher' ? '<a href="/stereomap/student.html" class="btn sm">Student view</a>' : ''}
+      ${role === 'teacher' ? '<a href="/stereomap/student.html?preview=1" class="btn sm">Student view</a>' : ''}
       <button class="btn sm" onclick="signOut()">Sign out</button>
     </div>
   `;
