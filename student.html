@@ -273,7 +273,17 @@
         radius: last.student_positions[idx]?.radius ?? inst.radius,
       }));
     } else {
-      studentInstruments = scramblePositions(instruments);
+      const lastPositions = attemptsUsed > 0 ? allAttempts[allAttempts.length - 1].student_positions : null;
+      studentInstruments = scramblePositions(instruments).map((inst, idx) => {
+        if (lockedInstruments[idx] && lastPositions) {
+          return {
+            ...inst,
+            angle: lastPositions[idx]?.angle ?? inst.angle,
+            radius: lastPositions[idx]?.radius ?? inst.radius,
+          };
+        }
+        return inst;
+      });
     }
 
     // Header
