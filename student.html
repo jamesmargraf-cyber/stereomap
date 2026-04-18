@@ -137,6 +137,7 @@
     const teacher = await isTeacher(user);
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
     if (teacher && !isPreview) { window.location.href = '/stereomap/teacher.html'; return; }
+    renderNav('student');
     loadSongs(user);
     attachListeners();
   })();
