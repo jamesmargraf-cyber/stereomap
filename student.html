@@ -517,18 +517,7 @@
         '<strong>Attempt ' + currentAttempt + ' of ' + MAX_ATTEMPTS + '.</strong> ' +
         (lockedCount > 0 ? lockedCount + ' instrument' + (lockedCount > 1 ? 's' : '') + ' locked in. Place the remaining ones.' : 'Listen again and place the instruments.');
     };
-        const pos = 20 + (unlockedIdx++ / Math.max(unlockedCount - 1, 1)) * 140;
-        return { ...inst, angle: pos, radius: MAP_RADII[0] };
-      });
-      const svgEl = document.getElementById('map-svg');
-      buildMapBase(svgEl);
-      renderDots(svgEl, studentInstruments, null, null, lockedInstruments);
-      document.getElementById('results-panel').classList.add('hidden');
-      const lockedCount = Object.keys(lockedInstruments).length;
-      document.getElementById('activity-instructions').innerHTML =
-        '<strong>Attempt ' + currentAttempt + ' of ' + MAX_ATTEMPTS + '.</strong> ' +
-        (lockedCount > 0 ? lockedCount + ' instrument' + (lockedCount > 1 ? 's' : '') + ' locked in. Place the remaining ones.' : 'Listen again and place the instruments.');
-    };
+
     wrap.style.display = 'block';
   }
 
