@@ -494,10 +494,29 @@
     btn.style.display = 'inline-flex';
     btn.textContent = `Try again →`;
     btn.onclick = () => {
+      const lastPositions = allAttempts[allAttempts.length - 1].student_positions;
       let unlockedIdx = 0;
       const unlockedCount = studentInstruments.filter((_, i) => !lockedInstruments[i]).length;
       studentInstruments = studentInstruments.map((inst, idx) => {
-        if (lockedInstruments[idx]) return inst;
+        if (lockedInstruments[idx]) {
+          return {
+            ...inst,
+            angle: lastPositions[idx]?.angle ?? inst.angle,
+            radius: lastPositions[idx]?.radius ?? inst.radius,
+          };
+        }
+        const pos = 20 + (unlockedIdx++ / Math.max(unlockedCount - 1, 1)) * 140;
+        return { ...inst, angle: pos, radius: MAP_RADII[0] };
+      });
+      const svgEl = document.getElementById('map-svg');
+      buildMapBase(svgEl);
+      renderDots(svgEl, studentInstruments, null, null, lockedInstruments);
+      document.getElementById('results-panel').classList.add('hidden');
+      const lockedCount = Object.keys(lockedInstruments).length;
+      document.getElementById('activity-instructions').innerHTML =
+        '<strong>Attempt ' + currentAttempt + ' of ' + MAX_ATTEMPTS + '.</strong> ' +
+        (lockedCount > 0 ? lockedCount + ' instrument' + (lockedCount > 1 ? 's' : '') + ' locked in. Place the remaining ones.' : 'Listen again and place the instruments.');
+    };
         const pos = 20 + (unlockedIdx++ / Math.max(unlockedCount - 1, 1)) * 140;
         return { ...inst, angle: pos, radius: MAP_RADII[0] };
       });
