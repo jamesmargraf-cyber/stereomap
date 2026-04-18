@@ -228,7 +228,14 @@
     currentSong = song;
 
     const instruments = song.instruments || [];
-    answerKey = instruments.map(i => ({ angle: i.angle, radius: i.radius }));
+    answerKey = instruments.map(i => ({
+      angle: i.angle,
+      radius: i.radius,
+      widthMin: i.widthMin,
+      widthMax: i.widthMax,
+      width: i.width,
+      type: i.type
+    }));
 
     // Load all attempts for this song
     const { data: submissions } = await db
