@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stereo Map — Teacher</title>
-  <link rel="icon" href="/stereomap/favicon.ico" sizes="any">
-  <link rel="icon" href="/stereomap/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/stereomap/apple-touch-icon.png">
-  <link rel="stylesheet" href="/stereomap/style.css">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
   <style>
     .tab-bar { display: flex; gap: 4px; margin-bottom: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; width: fit-content; }
     .tab { font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 9px; border: none; background: transparent; color: var(--text2); cursor: pointer; transition: background 0.15s, color 0.15s; }
@@ -121,9 +121,28 @@
     <div class="field">
       <label>Instruments</label>
       <div class="instr-list" id="modal-instr-list"></div>
-      <div class="add-row">
-        <input class="input" id="new-instr-input" placeholder="Instrument name...">
+      <div class="add-row" style="flex-wrap:wrap; gap:8px;">
+        <input class="input" id="new-instr-input" placeholder="Instrument name..." style="flex:1; min-width:140px;">
+        <select class="input" id="new-instr-type" style="width:110px; flex-shrink:0;">
+          <option value="mono">Mono</option>
+          <option value="stereo">Stereo</option>
+        </select>
         <button class="btn" id="add-instr-btn">Add</button>
+      </div>
+      <div id="stereo-width-fields" style="display:none; margin-top:10px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+        <div style="font-size:12px; color:var(--accent); margin-bottom:8px; font-family:'DM Mono',monospace;">Stereo width range (degrees)</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div style="flex:1;">
+            <label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">Min width</label>
+            <input class="input" id="new-instr-width-min" type="number" min="5" max="160" value="20" placeholder="20">
+          </div>
+          <div style="color:var(--text3); padding-top:18px;">–</div>
+          <div style="flex:1;">
+            <label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">Max width</label>
+            <input class="input" id="new-instr-width-max" type="number" min="5" max="160" value="60" placeholder="60">
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text3); margin-top:8px;">Students' arc width must fall within this range to score full points.</div>
       </div>
     </div>
 
@@ -149,8 +168,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/stereomap/app.js?v=4"></script>
-<script src="/stereomap/map.js?v=4"></script>
+<script src="app.js"></script>
+<script src="map.js"></script>
 <script>
   let teacherInstruments = [];
   let editingSongId = null;
@@ -203,6 +222,10 @@
     document.getElementById('add-instr-btn').addEventListener('click', addInstrument);
     document.getElementById('new-instr-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') addInstrument();
+    });
+    document.getElementById('new-instr-type').addEventListener('change', e => {
+      document.getElementById('stereo-width-fields').style.display =
+        e.target.value === 'stereo' ? 'block' : 'none';
     });
 
     // YouTube preview
@@ -325,9 +348,12 @@
       row.className = 'instr-row';
       const cl = mapClockLabel(inst.angle);
       const side = mapSideLabel(inst.angle);
+      const typeBadge = inst.type === 'stereo'
+        ? `<span style="font-family:'DM Mono',monospace;font-size:10px;background:rgba(79,195,247,0.12);color:var(--accent);border:1px solid rgba(79,195,247,0.3);border-radius:4px;padding:1px 5px;">stereo ${inst.widthMin}°–${inst.widthMax}°</span>`
+        : '';
       row.innerHTML = `
         <div class="instr-dot" style="background:${inst.color}"></div>
-        <div class="instr-name">${esc(inst.label)}</div>
+        <div class="instr-name">${esc(inst.label)} ${typeBadge}</div>
         <div class="instr-pos">${cl} · ${side}</div>
         <button class="instr-remove" title="Remove">×</button>
       `;
@@ -340,19 +366,30 @@
     const input = document.getElementById('new-instr-input');
     const name = input.value.trim();
     if (!name) return;
+    const type = document.getElementById('new-instr-type').value;
+    const widthMin = parseInt(document.getElementById('new-instr-width-min').value) || 20;
+    const widthMax = parseInt(document.getElementById('new-instr-width-max').value) || 60;
     const color = COLOR_LIST[teacherInstruments.length % COLOR_LIST.length];
-    teacherInstruments.push({
+    const inst = {
       id: 'i_' + Date.now() + '_' + Math.random().toString(36).slice(2),
       label: name,
       color,
+      type,
       r: 8,
       angle: 50 + Math.random() * 80,
-      radius: MAP_RADII[Math.floor(Math.random() * MAP_RADII.length)]
-    });
+      radius: MAP_RADII[Math.floor(Math.random() * MAP_RADII.length)],
+    };
+    if (type === 'stereo') {
+      inst.widthMin = widthMin;
+      inst.widthMax = widthMax;
+      inst.width = Math.round((widthMin + widthMax) / 2);
+    }
+    teacherInstruments.push(inst);
     input.value = '';
     input.focus();
+    document.getElementById('new-instr-type').value = 'mono';
+    document.getElementById('stereo-width-fields').style.display = 'none';
     renderInstrList();
-    // Modal is already open so SVG is visible — build immediately
     rebuildMap();
   }
 
@@ -499,12 +536,10 @@
           const cls = best >= 80 ? 'close' : best >= 50 ? 'near' : 'far';
           const progression = attempts.map(a => a.overall_score + '%').join(' → ');
           const attemptCount = attempts.length;
-         html += `<td>
-  <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);">${attempts.map((a, i) => {
-    const c = a.overall_score >= 80 ? 'var(--green)' : a.overall_score >= 50 ? 'var(--amber)' : 'var(--red)';
-    return `<span style="color:${c}">${a.overall_score}%</span>`;
-  }).join('<span style="color:var(--text3)"> → </span>')}</span>
-</td>`;
+          html += `<td>
+            <span class="score-pill ${cls}" title="${progression}">${best}%</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:4px;">${attemptCount}/3</span>
+          </td>`;
         }
       });
 
