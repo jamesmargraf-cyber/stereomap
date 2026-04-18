@@ -1,7 +1,6 @@
 // ── STEREO MAP ENGINE ──
 // Delta-based dragging: tracks cursor movement frame-to-frame,
 // applies scale correction for SVG viewport vs rendered size.
-// Dot moves in exact same direction as cursor at all times.
 
 const MAP_CX = 340, MAP_CY = 430;
 const MAP_RADII = [85, 145, 200, 245, 280];
@@ -12,12 +11,6 @@ const COLOR_LIST = [
 ];
 
 // ── COORDINATE MATH ──
-// Angle 90° = 12:00 (top center)
-// Angle 180° = 9:00 (left)
-// Angle 0° = 3:00 (right)
-// x = CX + r*cos(angle), y = CY - r*sin(angle)
-// Moving right in SVG → angle decreases → dot goes toward 3:00 ✓
-
 function mapAngleToXY(angleDeg, radius) {
   const rad = angleDeg * Math.PI / 180;
   return {
@@ -58,11 +51,29 @@ function mapLabelOffset(a) {
   return { dx: 0, dy: -16, anchor: 'middle' };
 }
 
+// ── STEREO ARC MATH ──
+// Draw a wedge arc from (centerAngle - halfWidth) to (centerAngle + halfWidth)
+// at the given radius, as a filled semi-transparent path
+function buildArcPath(centerAngle, halfWidth, radius) {
+  const startAngle = Math.max(0, centerAngle - halfWidth);
+  const endAngle = Math.min(180, centerAngle + halfWidth);
+  const outerR = radius + 18;
+  const innerR = Math.max(10, radius - 18);
+
+  const s1 = mapAngleToXY(startAngle, outerR);
+  const e1 = mapAngleToXY(endAngle, outerR);
+  const s2 = mapAngleToXY(endAngle, innerR);
+  const e2 = mapAngleToXY(startAngle, innerR);
+
+  const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+
+  return `M ${s1.x} ${s1.y} A ${outerR} ${outerR} 0 ${largeArc} 0 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${innerR} ${innerR} 0 ${largeArc} 1 ${e2.x} ${e2.y} Z`;
+}
+
 // ── SVG BASE BUILDER ──
 function buildMapBase(svgEl) {
   svgEl.innerHTML = '';
 
-  // Concentric arc bands
   const radii = [280, 245, 200, 145, 85];
   radii.forEach((r, i) => {
     const opacity = 0.06 + i * 0.035;
@@ -80,7 +91,6 @@ function buildMapBase(svgEl) {
     svgEl.appendChild(stroke);
   });
 
-  // Radial guide lines
   [180, 150, 120, 90, 60, 30, 0].forEach(a => {
     const rad = a * Math.PI / 180;
     const line = makeSVG('line');
@@ -92,7 +102,6 @@ function buildMapBase(svgEl) {
     svgEl.appendChild(line);
   });
 
-  // Tick marks + clock labels
   const ticks = [
     { a: 180, label: '9:00',  tx: 22,  ty: 436 },
     { a: 150, label: '10:00', tx: 82,  ty: 255 },
@@ -126,7 +135,6 @@ function buildMapBase(svgEl) {
     svgEl.appendChild(text);
   });
 
-  // Listener icon
   [
     ['ellipse', { cx: 340, cy: 454, rx: 38, ry: 13, fill: '#c0392b', opacity: 0.7 }],
     ['rect',    { x: 333, y: 439, width: 14, height: 14, rx: 3, fill: '#d4a574' }],
@@ -140,50 +148,125 @@ function buildMapBase(svgEl) {
     svgEl.appendChild(el);
   });
 
-  // Dots group
+  // Stereo arcs group (behind dots)
+  const arcsG = makeSVG('g');
+  arcsG.setAttribute('id', svgEl.id + '-arcs');
+  svgEl.appendChild(arcsG);
+
+  // Dots group (on top)
   const g = makeSVG('g');
   g.setAttribute('id', svgEl.id + '-dots');
   svgEl.appendChild(g);
 }
 
-// ── RENDER DOTS ──
+// ── RENDER DOTS + ARCS ──
 function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
+  const arcsG = document.getElementById(svgEl.id + '-arcs');
   const g = document.getElementById(svgEl.id + '-dots');
   if (!g) return;
+  arcsG.innerHTML = '';
   g.innerHTML = '';
 
-  // Draw answer key ghost dots first (if showing results)
+  // Draw answer key ghost arcs/dots first
   if (answerKey) {
     answerKey.forEach((ans, idx) => {
       const inst = instruments[idx];
       if (!inst || ans.angle == null) return;
-      const { x, y } = mapAngleToXY(ans.angle, ans.radius);
-      const { x: sx, y: sy } = mapAngleToXY(inst.angle, inst.radius);
 
-      // Connector line
-      if (Math.hypot(sx - x, sy - y) > 4) {
-        const line = makeSVG('line');
-        line.setAttribute('x1', sx); line.setAttribute('y1', sy);
-        line.setAttribute('x2', x);  line.setAttribute('y2', y);
-        line.setAttribute('stroke', inst.color);
-        line.setAttribute('stroke-width', '1');
-        line.setAttribute('stroke-dasharray', '3 3');
-        line.setAttribute('opacity', '0.35');
-        g.appendChild(line);
+      if (inst.type === 'stereo') {
+        // Ghost arc for answer key
+        const halfWidth = (ans.widthMin + ans.widthMax) / 4;
+        const arcPath = buildArcPath(ans.angle, halfWidth, ans.radius || MAP_RADII[2]);
+        const arc = makeSVG('path');
+        arc.setAttribute('d', arcPath);
+        arc.setAttribute('fill', inst.color);
+        arc.setAttribute('fill-opacity', '0.2');
+        arc.setAttribute('stroke', inst.color);
+        arc.setAttribute('stroke-width', '1.5');
+        arc.setAttribute('stroke-dasharray', '4 3');
+        arc.setAttribute('opacity', '0.6');
+        arcsG.appendChild(arc);
+      } else {
+        // Ghost dot for mono answer key
+        const { x, y } = mapAngleToXY(ans.angle, ans.radius);
+        const { x: sx, y: sy } = mapAngleToXY(inst.angle, inst.radius);
+        if (Math.hypot(sx - x, sy - y) > 4) {
+          const line = makeSVG('line');
+          line.setAttribute('x1', sx); line.setAttribute('y1', sy);
+          line.setAttribute('x2', x);  line.setAttribute('y2', y);
+          line.setAttribute('stroke', inst.color);
+          line.setAttribute('stroke-width', '1');
+          line.setAttribute('stroke-dasharray', '3 3');
+          line.setAttribute('opacity', '0.35');
+          g.appendChild(line);
+        }
+        const ghost = makeSVG('circle');
+        ghost.setAttribute('cx', x); ghost.setAttribute('cy', y);
+        ghost.setAttribute('r', (inst.r || 8) + 4);
+        ghost.setAttribute('fill', 'none');
+        ghost.setAttribute('stroke', inst.color);
+        ghost.setAttribute('stroke-width', '1.5');
+        ghost.setAttribute('stroke-dasharray', '3 2');
+        ghost.setAttribute('opacity', '0.65');
+        g.appendChild(ghost);
       }
-
-      // Ghost circle
-      const ghost = makeSVG('circle');
-      ghost.setAttribute('cx', x); ghost.setAttribute('cy', y);
-      ghost.setAttribute('r', (inst.r || 8) + 4);
-      ghost.setAttribute('fill', 'none');
-      ghost.setAttribute('stroke', inst.color);
-      ghost.setAttribute('stroke-width', '1.5');
-      ghost.setAttribute('stroke-dasharray', '3 2');
-      ghost.setAttribute('opacity', '0.65');
-      g.appendChild(ghost);
     });
   }
+
+  // Draw student instrument arcs (stereo) behind dots
+  instruments.forEach((inst, idx) => {
+    if (inst.type !== 'stereo') return;
+    const angle = inst.angle || 90;
+    const radius = inst.radius || MAP_RADII[2];
+    const halfWidth = (inst.width || 30) / 2;
+
+    const arcPath = buildArcPath(angle, halfWidth, radius);
+    const arc = makeSVG('path');
+    arc.setAttribute('d', arcPath);
+    arc.setAttribute('fill', inst.color);
+    arc.setAttribute('fill-opacity', '0.18');
+    arc.setAttribute('stroke', inst.color);
+    arc.setAttribute('stroke-width', '1.5');
+    arc.setAttribute('opacity', '0.7');
+    arcsG.appendChild(arc);
+
+    // Left edge handle
+    const leftAngle = Math.max(0, angle - halfWidth);
+    const leftPos = mapAngleToXY(leftAngle, radius);
+    const leftHandle = makeSVG('circle');
+    leftHandle.setAttribute('cx', leftPos.x);
+    leftHandle.setAttribute('cy', leftPos.y);
+    leftHandle.setAttribute('r', 6);
+    leftHandle.setAttribute('fill', inst.color);
+    leftHandle.setAttribute('opacity', '0.8');
+    leftHandle.setAttribute('cursor', 'ew-resize');
+    leftHandle.setAttribute('data-idx', idx);
+    leftHandle.setAttribute('data-handle', 'left');
+    arcsG.appendChild(leftHandle);
+
+    // Right edge handle
+    const rightAngle = Math.min(180, angle + halfWidth);
+    const rightPos = mapAngleToXY(rightAngle, radius);
+    const rightHandle = makeSVG('circle');
+    rightHandle.setAttribute('cx', rightPos.x);
+    rightHandle.setAttribute('cy', rightPos.y);
+    rightHandle.setAttribute('r', 6);
+    rightHandle.setAttribute('fill', inst.color);
+    rightHandle.setAttribute('opacity', '0.8');
+    rightHandle.setAttribute('cursor', 'ew-resize');
+    rightHandle.setAttribute('data-idx', idx);
+    rightHandle.setAttribute('data-handle', 'right');
+    arcsG.appendChild(rightHandle);
+
+    if (answerKey === null) {
+      leftHandle.style.cursor = 'ew-resize';
+      rightHandle.style.cursor = 'ew-resize';
+      leftHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'));
+      leftHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'), { passive: false });
+      rightHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'));
+      rightHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'), { passive: false });
+    }
+  });
 
   // Draw instrument dots
   instruments.forEach((inst, idx) => {
@@ -217,6 +300,21 @@ function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
     circle.setAttribute('opacity', '0.95');
     group.appendChild(circle);
 
+    // Stereo indicator badge
+    if (inst.type === 'stereo') {
+      const badge = makeSVG('text');
+      badge.setAttribute('x', x);
+      badge.setAttribute('y', y + 1);
+      badge.setAttribute('text-anchor', 'middle');
+      badge.setAttribute('dominant-baseline', 'central');
+      badge.setAttribute('font-family', 'DM Mono, monospace');
+      badge.setAttribute('font-size', '7');
+      badge.setAttribute('fill', '#fff');
+      badge.setAttribute('pointer-events', 'none');
+      badge.textContent = '↔';
+      group.appendChild(badge);
+    }
+
     const label = makeSVG('text');
     label.setAttribute('x', x + dx); label.setAttribute('y', y + dy);
     label.setAttribute('text-anchor', anchor);
@@ -244,6 +342,8 @@ let _activeSvg = null;
 let _activeInstruments = null;
 let _readoutId = null;
 let _onDragEndCallback = null;
+let _dragMode = 'dot'; // 'dot', 'left', 'right'
+let _dragIdx = null;
 
 function mapGetScale(svgEl) {
   const rect = svgEl.getBoundingClientRect();
@@ -254,11 +354,10 @@ function mapStartDrag(e, svgEl, instruments, onEnd) {
   e.preventDefault();
   const idx = parseInt(e.currentTarget.getAttribute('data-idx'));
   _dragging = idx;
+  _dragMode = 'dot';
   _activeSvg = svgEl;
   _activeInstruments = instruments;
   _onDragEndCallback = onEnd || null;
-
-  // Find nearest readout sibling
   _readoutId = svgEl.id === 'map-svg' ? 'map-readout' : 'student-readout';
 
   const pos = mapAngleToXY(instruments[idx].angle, instruments[idx].radius);
@@ -277,33 +376,65 @@ function mapStartDrag(e, svgEl, instruments, onEnd) {
   renderDots(svgEl, instruments, idx, null);
 }
 
+function mapStartHandleDrag(e, svgEl, instruments, idx, handle) {
+  e.preventDefault();
+  e.stopPropagation();
+  _dragging = idx;
+  _dragMode = handle;
+  _activeSvg = svgEl;
+  _activeInstruments = instruments;
+  _readoutId = svgEl.id === 'map-svg' ? 'map-readout' : 'student-readout';
+
+  const src = e.touches ? e.touches[0] : e;
+  _prevClientX = src.clientX;
+  _prevClientY = src.clientY;
+
+  document.body.style.cursor = 'ew-resize';
+  document.addEventListener('mousemove', _onDrag);
+  document.addEventListener('mouseup', _onDragEnd);
+  document.addEventListener('touchmove', _onDrag, { passive: false });
+  document.addEventListener('touchend', _onDragEnd);
+}
+
 function _onDrag(e) {
   if (_dragging === null) return;
   e.preventDefault();
   const src = e.touches ? e.touches[0] : e;
   const { sx, sy } = mapGetScale(_activeSvg);
-
-  // Delta-based movement — dot follows cursor exactly
   const ddx = (src.clientX - _prevClientX) * sx;
   const ddy = (src.clientY - _prevClientY) * sy;
   _prevClientX = src.clientX;
   _prevClientY = src.clientY;
 
-  _dotX += ddx;
-  _dotY += ddy;
+  const inst = _activeInstruments[_dragging];
 
-  const clampedY = Math.min(_dotY, MAP_CY - 5);
-  const { angle, radius } = mapXYToAngleRadius(_dotX, clampedY);
-  _activeInstruments[_dragging].angle = angle;
-  _activeInstruments[_dragging].radius = radius;
-
-  renderDots(_activeSvg, _activeInstruments, _dragging, null);
-
-  const rd = document.getElementById(_readoutId);
-  if (rd) {
-    rd.textContent = _activeInstruments[_dragging].label +
-      ' — ' + mapClockLabel(angle) + ' · ' + mapSideLabel(angle);
-    rd.classList.add('active');
+  if (_dragMode === 'dot') {
+    _dotX += ddx; _dotY += ddy;
+    const clampedY = Math.min(_dotY, MAP_CY - 5);
+    const { angle, radius } = mapXYToAngleRadius(_dotX, clampedY);
+    inst.angle = angle;
+    inst.radius = radius;
+    renderDots(_activeSvg, _activeInstruments, _dragging, null);
+    const rd = document.getElementById(_readoutId);
+    if (rd) {
+      rd.textContent = inst.label + ' — ' + mapClockLabel(angle) + ' · ' + mapSideLabel(angle);
+      rd.classList.add('active');
+    }
+  } else if (_dragMode === 'left' || _dragMode === 'right') {
+    // Convert cursor delta to angle change
+    const angleDelta = -ddx * 0.3;
+    const currentWidth = inst.width || 30;
+    if (_dragMode === 'left') {
+      inst.width = Math.max(10, Math.min(160, currentWidth + angleDelta * 2));
+    } else {
+      inst.width = Math.max(10, Math.min(160, currentWidth - angleDelta * 2));
+    }
+    renderDots(_activeSvg, _activeInstruments, null, null);
+    const rd = document.getElementById(_readoutId);
+    if (rd) {
+      rd.textContent = inst.label + ' — width: ' + Math.round(inst.width) + '°';
+      rd.classList.add('active');
+    }
   }
 }
 
@@ -330,15 +461,45 @@ function _onDragEnd() {
 function scoreAttempt(studentInstruments, answerKey) {
   return studentInstruments.map((inst, idx) => {
     const ans = answerKey[idx];
-    if (!ans) return { label: inst.label, color: inst.color, grade: 'none', score: 0 };
-    const ringDiff  = Math.abs(MAP_RADII.indexOf(inst.radius) - MAP_RADII.indexOf(ans.radius));
-    const angleDiff = Math.abs(inst.angle - ans.angle) / 30;
-    const dist = ringDiff + angleDiff;
-    let grade, score;
-    if (dist < 1.2)      { grade = 'close'; score = 100; }
-    else if (dist < 2.5) { grade = 'near';  score = 60;  }
-    else                 { grade = 'far';   score = 20;  }
-    return { label: inst.label, color: inst.color, grade, score };
+    if (!ans) return { label: inst.label, color: inst.color, type: inst.type || 'mono', grade: 'none', score: 0 };
+
+    if (inst.type === 'stereo') {
+      // Score center placement
+      const ringDiff = Math.abs(MAP_RADII.indexOf(inst.radius) - MAP_RADII.indexOf(ans.radius));
+      const angleDiff = Math.abs(inst.angle - ans.angle) / 30;
+      const dist = ringDiff + angleDiff;
+      let centerGrade;
+      if (dist < 1.2)      centerGrade = 'close';
+      else if (dist < 2.5) centerGrade = 'near';
+      else                 centerGrade = 'far';
+
+      // Score width
+      const studentWidth = inst.width || 30;
+      let widthGrade;
+      if (studentWidth >= ans.widthMin && studentWidth <= ans.widthMax) {
+        widthGrade = 'good';
+      } else if (studentWidth < ans.widthMin) {
+        widthGrade = 'narrow';
+      } else {
+        widthGrade = 'wide';
+      }
+
+      const centerScore = centerGrade === 'close' ? 100 : centerGrade === 'near' ? 60 : 20;
+      const widthScore = widthGrade === 'good' ? 100 : 40;
+      const score = Math.round((centerScore + widthScore) / 2);
+
+      return { label: inst.label, color: inst.color, type: 'stereo', centerGrade, widthGrade, score, grade: centerGrade };
+    } else {
+      // Mono scoring
+      const ringDiff = Math.abs(MAP_RADII.indexOf(inst.radius) - MAP_RADII.indexOf(ans.radius));
+      const angleDiff = Math.abs(inst.angle - ans.angle) / 30;
+      const dist = ringDiff + angleDiff;
+      let grade, score;
+      if (dist < 1.2)      { grade = 'close'; score = 100; }
+      else if (dist < 2.5) { grade = 'near';  score = 60;  }
+      else                 { grade = 'far';   score = 20;  }
+      return { label: inst.label, color: inst.color, type: 'mono', grade, score };
+    }
   });
 }
 
@@ -352,6 +513,7 @@ function scramblePositions(instruments) {
   return instruments.map((inst, idx) => ({
     ...inst,
     angle: 20 + (idx / Math.max(total - 1, 1)) * 140,
-    radius: MAP_RADII[0]
+    radius: MAP_RADII[0],
+    width: inst.type === 'stereo' ? 30 : undefined
   }));
 }
