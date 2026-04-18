@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stereo Map — Student</title>
-  <link rel="icon" href="/stereomap/favicon.ico" sizes="any">
-  <link rel="icon" href="/stereomap/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/stereomap/apple-touch-icon.png">
-  <link rel="stylesheet" href="/stereomap/style.css">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
   <style>
     .attempt-pip {
       width: 10px; height: 10px; border-radius: 50%;
@@ -106,8 +106,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/stereomap/app.js?v=4"></script>
-<script src="/stereomap/map.js?v=4"></script>
+<script src="app.js"></script>
+<script src="map.js"></script>
 <script>
   const MAX_ATTEMPTS = 3;
 
@@ -134,8 +134,7 @@
     if (!user) { window.location.href = '/stereomap/index.html'; return; }
     await ensureProfile(user);
     const teacher = await isTeacher(user);
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
-if (teacher && !isPreview) { window.location.href = '/stereomap/teacher.html'; return; }
+    if (teacher) { window.location.href = '/stereomap/teacher.html'; return; }
     renderNav('student');
     loadSongs(user);
     attachListeners();
@@ -401,17 +400,33 @@ if (teacher && !isPreview) { window.location.href = '/stereomap/teacher.html'; r
       overall >= 80 ? 'var(--green)' : overall >= 50 ? 'var(--amber)' : 'var(--red)';
 
     results.forEach(r => {
-      const barPct = r.grade === 'close' ? 90 : r.grade === 'near' ? 55 : 20;
-      const barColor = r.grade === 'close' ? 'var(--green)' : r.grade === 'near' ? 'var(--amber)' : 'var(--red)';
-      const scoreText = r.grade === 'close' ? 'Close' : r.grade === 'near' ? 'Near' : 'Off';
       const row = document.createElement('div');
       row.className = 'result-row';
-      row.innerHTML = `
-        <div class="result-dot" style="background:${r.color}"></div>
-        <div class="result-name">${esc(r.label)}</div>
-        <div class="result-bar-wrap"><div class="result-bar" style="width:${barPct}%;background:${barColor}"></div></div>
-        <div class="result-score score-${r.grade}">${scoreText}</div>
-      `;
+      if (r.type === 'stereo') {
+        const centerText = r.centerGrade === 'close' ? 'Close' : r.centerGrade === 'near' ? 'Near' : 'Off';
+        const centerColor = r.centerGrade === 'close' ? 'var(--green)' : r.centerGrade === 'near' ? 'var(--amber)' : 'var(--red)';
+        const widthText = r.widthGrade === 'good' ? 'Good width' : r.widthGrade === 'narrow' ? 'Too narrow' : 'Too wide';
+        const widthColor = r.widthGrade === 'good' ? 'var(--green)' : 'var(--amber)';
+        row.innerHTML = `
+          <div class="result-dot" style="background:${r.color}"></div>
+          <div class="result-name" style="flex:1;">${esc(r.label)} <span style="font-size:10px;color:var(--accent);font-family:'DM Mono',monospace;">stereo</span></div>
+          <div style="display:flex;gap:6px;">
+            <span class="result-score" style="color:${centerColor}">Center: ${centerText}</span>
+            <span style="color:var(--text3)">·</span>
+            <span class="result-score" style="color:${widthColor}">${widthText}</span>
+          </div>
+        `;
+      } else {
+        const barPct = r.grade === 'close' ? 90 : r.grade === 'near' ? 55 : 20;
+        const barColor = r.grade === 'close' ? 'var(--green)' : r.grade === 'near' ? 'var(--amber)' : 'var(--red)';
+        const scoreText = r.grade === 'close' ? 'Close' : r.grade === 'near' ? 'Near' : 'Off';
+        row.innerHTML = `
+          <div class="result-dot" style="background:${r.color}"></div>
+          <div class="result-name">${esc(r.label)}</div>
+          <div class="result-bar-wrap"><div class="result-bar" style="width:${barPct}%;background:${barColor}"></div></div>
+          <div class="result-score score-${r.grade}">${scoreText}</div>
+        `;
+      }
       list.appendChild(row);
     });
 
