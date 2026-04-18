@@ -348,9 +348,10 @@ function makeSVG(tag) {
 }
 
 function scramblePositions(instruments) {
-  return instruments.map(inst => ({
+  const total = instruments.length;
+  return instruments.map((inst, idx) => ({
     ...inst,
-    angle: 25 + Math.random() * 130,
-    radius: MAP_RADII[Math.floor(Math.random() * MAP_RADII.length)]
+    angle: 20 + (idx / Math.max(total - 1, 1)) * 140,
+    radius: MAP_RADII[0]
   }));
 }
