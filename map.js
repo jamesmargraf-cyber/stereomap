@@ -160,7 +160,7 @@ function buildMapBase(svgEl) {
 }
 
 // ── RENDER DOTS + ARCS ──
-function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
+function renderDots(svgEl, instruments, activeIdx = null, answerKey = null, locks = {}) {
   const arcsG = document.getElementById(svgEl.id + '-arcs');
   const g = document.getElementById(svgEl.id + '-dots');
   if (!g) return;
@@ -219,16 +219,22 @@ function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
     const angle = inst.angle || 90;
     const radius = inst.radius || MAP_RADII[2];
     const halfWidth = (inst.width || 30) / 2;
+    const lockState = locks[idx];
+    const fullyLocked = lockState === 'full';
+    const centerLocked = lockState === 'center';
+    const widthDraggable = answerKey === null && !fullyLocked;
 
     const arcPath = buildArcPath(angle, halfWidth, radius);
     const arc = makeSVG('path');
     arc.setAttribute('d', arcPath);
-    arc.setAttribute('fill', inst.color);
-    arc.setAttribute('fill-opacity', '0.18');
-    arc.setAttribute('stroke', inst.color);
+    arc.setAttribute('fill', fullyLocked ? '#66bb6a' : inst.color);
+    arc.setAttribute('fill-opacity', fullyLocked ? '0.15' : '0.18');
+    arc.setAttribute('stroke', fullyLocked ? '#66bb6a' : inst.color);
     arc.setAttribute('stroke-width', '1.5');
     arc.setAttribute('opacity', '0.7');
     arcsG.appendChild(arc);
+
+    if (!widthDraggable) return;
 
     // Left edge handle
     const leftAngle = Math.max(0, angle - halfWidth);
@@ -239,9 +245,9 @@ function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
     leftHandle.setAttribute('r', 6);
     leftHandle.setAttribute('fill', inst.color);
     leftHandle.setAttribute('opacity', '0.8');
-    leftHandle.setAttribute('cursor', 'ew-resize');
     leftHandle.setAttribute('data-idx', idx);
     leftHandle.setAttribute('data-handle', 'left');
+    leftHandle.style.cursor = 'ew-resize';
     arcsG.appendChild(leftHandle);
 
     // Right edge handle
@@ -253,19 +259,15 @@ function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
     rightHandle.setAttribute('r', 6);
     rightHandle.setAttribute('fill', inst.color);
     rightHandle.setAttribute('opacity', '0.8');
-    rightHandle.setAttribute('cursor', 'ew-resize');
     rightHandle.setAttribute('data-idx', idx);
     rightHandle.setAttribute('data-handle', 'right');
+    rightHandle.style.cursor = 'ew-resize';
     arcsG.appendChild(rightHandle);
 
-    if (answerKey === null) {
-      leftHandle.style.cursor = 'ew-resize';
-      rightHandle.style.cursor = 'ew-resize';
-      leftHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'));
-      leftHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'), { passive: false });
-      rightHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'));
-      rightHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'), { passive: false });
-    }
+    leftHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'));
+    leftHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'left'), { passive: false });
+    rightHandle.addEventListener('mousedown', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'));
+    rightHandle.addEventListener('touchstart', e => mapStartHandleDrag(e, svgEl, instruments, idx, 'right'), { passive: false });
   });
 
   // Draw instrument dots
@@ -274,13 +276,25 @@ function renderDots(svgEl, instruments, activeIdx = null, answerKey = null) {
     const { dx, dy, anchor } = mapLabelOffset(inst.angle);
     const isActive = idx === activeIdx;
     const isLead = inst.r > 10;
-    const draggable = answerKey === null;
+    const lockState = locks[idx];
+    const fullyLocked = lockState === 'full';
+    const draggable = answerKey === null && !fullyLocked;
 
     const group = makeSVG('g');
     group.setAttribute('data-idx', idx);
-    group.style.cursor = draggable ? (isActive ? 'grabbing' : 'grab') : 'default';
+    group.style.cursor = draggable ? (isActive ? 'grabbing' : 'grab') : (fullyLocked ? 'default' : 'default');
 
-    if (isLead || isActive) {
+    // Green lock ring for correct instruments
+    if (fullyLocked) {
+      const lockRing = makeSVG('circle');
+      lockRing.setAttribute('cx', x); lockRing.setAttribute('cy', y);
+      lockRing.setAttribute('r', (inst.r || 8) + 5);
+      lockRing.setAttribute('fill', 'none');
+      lockRing.setAttribute('stroke', '#66bb6a');
+      lockRing.setAttribute('stroke-width', '2.5');
+      lockRing.setAttribute('opacity', '0.9');
+      group.appendChild(lockRing);
+    } else if (isLead || isActive) {
       const ring = makeSVG('circle');
       ring.setAttribute('cx', x); ring.setAttribute('cy', y);
       ring.setAttribute('r', (inst.r || 8) + (isActive ? 5 : 3));
@@ -342,8 +356,9 @@ let _activeSvg = null;
 let _activeInstruments = null;
 let _readoutId = null;
 let _onDragEndCallback = null;
-let _dragMode = 'dot'; // 'dot', 'left', 'right'
+let _dragMode = 'dot';
 let _dragIdx = null;
+let _activeLocks = {};
 
 function mapGetScale(svgEl) {
   const rect = svgEl.getBoundingClientRect();
@@ -358,6 +373,7 @@ function mapStartDrag(e, svgEl, instruments, onEnd) {
   _activeSvg = svgEl;
   _activeInstruments = instruments;
   _onDragEndCallback = onEnd || null;
+  _activeLocks = {};
   _readoutId = svgEl.id === 'map-svg' ? 'map-readout' : 'student-readout';
 
   const pos = mapAngleToXY(instruments[idx].angle, instruments[idx].radius);
@@ -409,6 +425,8 @@ function _onDrag(e) {
   const inst = _activeInstruments[_dragging];
 
   if (_dragMode === 'dot') {
+    const instLock = (_activeLocks || {})[_dragging];
+    if (instLock === 'full' || instLock === 'center') return;
     _dotX += ddx; _dotY += ddy;
     const clampedY = Math.min(_dotY, MAP_CY - 5);
     const { angle, radius } = mapXYToAngleRadius(_dotX, clampedY);
